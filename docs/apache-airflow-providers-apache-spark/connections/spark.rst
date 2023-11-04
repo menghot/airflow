@@ -44,6 +44,7 @@ Extra (optional)
     * ``deploy-mode`` - Whether to deploy your driver on the worker nodes (cluster) or locally as an external client (client).
     * ``spark-binary`` - The command to use for Spark submit. Some distros may use ``spark2-submit``. Default ``spark-submit``. Only ``spark-submit``, ``spark2-submit`` or ``spark3-submit`` are allowed as value.
     * ``namespace`` - Kubernetes namespace (``spark.kubernetes.namespace``) to divide cluster resources between multiple users (via resource quota).
+    * ``spark-master-rest-url`` - The url to use for polling the driver status, typically, Spark run as standalone cluster mode
 
 When specifying the connection in environment variable you should specify
 it using URI syntax.

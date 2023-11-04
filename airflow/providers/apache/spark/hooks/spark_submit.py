@@ -187,6 +187,7 @@ class SparkSubmitHook(BaseHook, LoggingMixin):
             "deploy_mode": None,
             "spark_binary": self.spark_binary or "spark-submit",
             "namespace": None,
+            "spark_master_rest_url": None,
         }
 
         try:
@@ -219,6 +220,7 @@ class SparkSubmitHook(BaseHook, LoggingMixin):
                 )
             conn_data["spark_binary"] = self.spark_binary
             conn_data["namespace"] = extra.get("namespace")
+            conn_data["spark_master_rest_url"] = extra.get("spark-master-rest-url")
         except AirflowException:
             self.log.info(
                 "Could not load connection string %s, defaulting to %s", self._conn_id, conn_data["master"]
@@ -358,37 +360,36 @@ class SparkSubmitHook(BaseHook, LoggingMixin):
 
         :return: full command to be executed
         """
+
+        # The driver id is required, so we can poll it's status
+        if not self._driver_id:
+            raise AirflowException(
+                "Invalid status: attempted to poll driver status but no driver id is known. Giving up."
+            )
+
         curl_max_wait_time = 30
         spark_host = self._connection["master"]
-        if spark_host.endswith(":6066"):
-            spark_host = spark_host.replace("spark://", "http://")
+
+        spark_master_rest_url = self._connection["spark_master_rest_url"]
+
+        # If spark_master_rest_url absent, try to resolve url from spark host
+        if not spark_master_rest_url and spark_host.endswith(":6066"):
+            spark_master_rest_url = spark_host.replace("spark://", "http://")
+
+        if not spark_master_rest_url:
             connection_cmd = [
                 "/usr/bin/curl",
                 "--max-time",
                 str(curl_max_wait_time),
-                f"{spark_host}/v1/submissions/status/{self._driver_id}",
+                f"{spark_master_rest_url}/v1/submissions/status/{self._driver_id}",
             ]
             self.log.info(connection_cmd)
-
-            # The driver id so we can poll for its status
-            if not self._driver_id:
-                raise AirflowException(
-                    "Invalid status: attempted to poll driver status but no driver id is known. Giving up."
-                )
 
         else:
             connection_cmd = self._get_spark_binary_path()
 
-            # The url to the spark master
-            connection_cmd += ["--master", self._connection["master"]]
-
-            # The driver id so we can poll for its status
-            if self._driver_id:
-                connection_cmd += ["--status", self._driver_id]
-            else:
-                raise AirflowException(
-                    "Invalid status: attempted to poll driver status but no driver id is known. Giving up."
-                )
+            # The command to the spark master
+            connection_cmd += ["--master", self._connection["master"], "--status", self._driver_id]
 
         self.log.debug("Poll driver status cmd: %s", connection_cmd)
 

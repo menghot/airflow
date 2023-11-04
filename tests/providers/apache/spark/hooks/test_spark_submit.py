@@ -143,7 +143,14 @@ class TestSparkSubmitHook:
                 extra='{"deploy-mode": "client"}',
             )
         )
-
+        db.merge_conn(
+            Connection(
+                conn_id="spark_standalone_cluster_master_rest_url",
+                conn_type="spark",
+                host="spark://spark-standalone-master:6066",
+                extra='{"deploy-mode": "cluster", "spark-master-rest-url": "http://spark-standalone-master:5055"}',
+            )
+        )
     @patch(
         "airflow.providers.apache.spark.hooks.spark_submit.os.getenv", return_value="/tmp/airflow_krb5_ccache"
     )
@@ -237,6 +244,8 @@ class TestSparkSubmitHook:
         hook_spark_standalone_cluster._driver_id = "driver-20171128111416-0001"
         hook_spark_yarn_cluster = SparkSubmitHook(conn_id="spark_yarn_cluster")
         hook_spark_yarn_cluster._driver_id = "driver-20171128111417-0001"
+        hook_spark_standalone_cluster_master_rest_url = SparkSubmitHook(conn_id="spark_standalone_cluster_master_rest_url")
+        hook_spark_standalone_cluster_master_rest_url._driver_id = "driver-20171128111418-0001"
 
         # When
         build_track_driver_status_spark_standalone_cluster = (
@@ -244,6 +253,9 @@ class TestSparkSubmitHook:
         )
         build_track_driver_status_spark_yarn_cluster = (
             hook_spark_yarn_cluster._build_track_driver_status_command()
+        )
+        build_track_driver_status_spark_standalone_cluster_master_rest_url = (
+            hook_spark_standalone_cluster_master_rest_url._build_track_driver_status_command()
         )
 
         # Then
@@ -260,9 +272,16 @@ class TestSparkSubmitHook:
             "--status",
             "driver-20171128111417-0001",
         ]
+        expected_spark_standalone_cluster_master_rest_url = [
+            "/usr/bin/curl",
+            "--max-time",
+            "30",
+            "http://spark-standalone-master:5055/v1/submissions/status/driver-20171128111418-0001",
+        ]
 
         assert expected_spark_standalone_cluster == build_track_driver_status_spark_standalone_cluster
         assert expected_spark_yarn_cluster == build_track_driver_status_spark_yarn_cluster
+        assert expected_spark_standalone_cluster_master_rest_url == build_track_driver_status_spark_standalone_cluster_master_rest_url
 
     @patch("airflow.providers.apache.spark.hooks.spark_submit.subprocess.Popen")
     def test_spark_process_runcmd(self, mock_popen):
